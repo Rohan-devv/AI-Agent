@@ -1,9 +1,11 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-const GEMINI_API_KEY = "AIzaSyB7Uco4d8evmh302DouJHC9OW0p4OG5TVI";
+import readlineSync from "readline-sync";
 
+// --- API Key (direct variable) ---
+const GEMINI_API_KEY = "AIzaSyB7Uco4d8evmh302DouJHC9OW0p4OG5TVI";
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-// Tool function
+// --- Tool function ---
 function getweather(city) {
   if (city.toLowerCase() === "delhi") return 30;
   if (city.toLowerCase() === "mumbai") return 35;
@@ -11,7 +13,7 @@ function getweather(city) {
   return null;
 }
 
-// --- SYSTEM PROMPT ---
+/// --- FIXED SYSTEM PROMPT ---
 const SYSTEM_PROMPT = `
 You are a weather assistant. 
 You have access to this function: getweather(city: string) -> number (temperature in °C).
@@ -28,55 +30,77 @@ You must think in steps and strictly reply in JSON lines like this:
 Always use this structure. Do not add extra text.
 `;
 
-const userQuery = "What is the sum of weather of Delhi and Mumbai?";
-
+// --- Model init ---
 const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-001" });
 
+
+// --- MEMORY (conversation history) ---
+let history = [
+  { role: "user", parts: [{ text: SYSTEM_PROMPT }] }
+];
+
+
+// --- Conversation loop ---
 async function runConversation() {
-  // Start with system + user messages
-  let history = [
-    {
-      role: "user",
-      parts: [
-        { text: SYSTEM_PROMPT },
-        { text: userQuery }
-      ]
-    }
-  ];
+  console.log("Type 'exit' to quit.\n");
 
   while (true) {
-    const result = await model.generateContent({ contents: history });
-    const response = result.response.text().trim();
+    const userQuery = readlineSync.question(">> ");
+    if (userQuery.toLowerCase() === "exit") break;
 
-    console.log("Model:", response);
+    // Add user input to history
+    history.push({
+      role: "user",
+      parts: [{ text: userQuery }]
+    });
 
-    // Parse last JSON line
-    const lines = response.split("\n").filter(l => l.trim().startsWith("{"));
-    const lastJson = JSON.parse(lines[lines.length - 1]);
 
-    if (lastJson.type === "action" && lastJson.function === "getweather") {
-      // Run the JS tool
-      const obs = getweather(lastJson.input);
+    
+    while (true) {
+      const result = await model.generateContent({ contents: history });
+      const response = result.response.text().trim();
+      console.log("Model:\n", response);
 
-      // Add observation back to history
+      // Save model response in history
       history.push({
-        role: "user",
-        parts: [{ text: `{ "type": "observation", "observation": "${obs}" }` }]
+        role: "model",
+        parts: [{ text: response }]
       });
-    } else if (lastJson.type === "output") {
-      console.log("✅ Final Answer:", lastJson.output);
-      break;
-    } else {
-      break;
+
+      // Find last JSON line
+      // Clean model response and keep only valid JSON lines
+      const lines = response
+        .split("\n")
+        .map(l => l.trim())
+        .filter(l => l.startsWith("{") && l.endsWith("}"));
+
+      // extra safety: remove ```json or ```
+      const cleanLines = lines.map(l => l.replace(/```json|```/g, "").trim());
+
+      if (cleanLines.length === 0) break;
+
+      const lastJson = JSON.parse(cleanLines[cleanLines.length - 1]);
+
+
+      if (lastJson.type === "action" && lastJson.function === "getweather") {
+        const obs = getweather(lastJson.input);
+
+        // add observation back
+        history.push({
+          role: "user",
+          parts: [{ text: `{ "type": "observation", "observation": "${obs}" }` }]
+        });
+      } else if (lastJson.type === "output") {
+        console.log("✅ Final Answer:", lastJson.output);
+        break;
+      } else {
+        break;
+      }
     }
   }
 }
 
 runConversation();
-
-
-
-
 
 
 
