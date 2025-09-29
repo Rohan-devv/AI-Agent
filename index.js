@@ -1,25 +1,12 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-const GEMINI_API_KEY = "AIzaSyDannA2YcUAqZ0Qc98iSFqjoTU0juwv0l4";
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-// // client banaya hai yaha humne jisse hum baat kar sakte hai
+const genAI = new GoogleGenerativeAI("AIzaSyDannA2YcUAqZ0Qc98iSFqjoTU0juwv0l4");
 
-// Tools-->
+async function run() {
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-function getweather(city) {
-    if (city === "delhi") return "30 degree celsius";
-    if (city === "mumbai") return "35 degree celsius";
-    if (city === "kolkata") return "32 degree celsius";
+  const result = await model.generateContent("Say only: Hello Gemini!");
+  console.log(result.response.text());
 }
 
-const user = "what is the weather of delhi";
-const city = "delhi";
-const weather = getweather(city);
-
-const model = genAI.getGenerativeModel({ model: "models/gemini-1.5-flash" });
-
-
-model.generateContent(`User asked: ${user}. Real data: ${weather}.`)
-.then((result) => {
-    console.log(result.response.text());
-});
+run().catch(console.error);
